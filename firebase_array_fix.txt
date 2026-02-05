@@ -1,0 +1,22 @@
+// Helper function to convert Firebase data to arrays
+// Firebase converts arrays with null values to objects, so we need to convert them back
+
+function toArray(data) {
+  if (!data) return [];
+  if (Array.isArray(data)) return data;
+  return Object.values(data).filter(v => v !== null && v !== undefined);
+}
+
+// Replace line 139 in game.js:
+// FROM: renderHand(player.hand || []);
+// TO:   renderHand(toArray(player.hand));
+
+// Replace line 142 in game.js:
+// FROM: renderEnergyZone(player.energyZone || []);
+// TO:   renderEnergyZone(toArray(player.energyZone));
+
+// Replace line 145 in game.js:
+// FROM: document.getElementById('opponent-hand-count').textContent = (opponent.hand || []).length;
+// TO:   document.getElementById('opponent-hand-count').textContent = toArray(opponent.hand).length;
+
+// Add this toArray function right before the updateUI function (after line 110)

@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ポケポケ オンライン対戦</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+  <!-- Title Screen -->
+  <div id="title-screen" class="screen">
+    <h1>ポケポケ バトル</h1>
+    <div class="input-group">
+      <input type="text" id="player-name" placeholder="プレイヤー名を入力">
+    </div>
+    <button id="start-btn">スタート</button>
+  </div>
+
+  <!-- Deck Builder Screen -->
+  <div id="deck-builder" class="screen hidden">
+    <h2>デッキ構築</h2>
+    
+    <div class="panel">
+      <h3>エネルギータイプを選択 (1-3種類)</h3>
+      <div id="energy-options"></div>
+    </div>
+
+    <div class="deck-container">
+      <div class="panel">
+        <h3>カード一覧</h3>
+        <div id="card-list"></div>
+      </div>
+
+      <div class="panel">
+        <h3>現在のデッキ <span id="card-count">0 / 20</span></h3>
+        <div id="deck-list"></div>
+        <button id="to-matchmaking-btn" disabled>次へ進む</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Matchmaking Screen -->
+  <div id="matchmaking" class="screen hidden">
+    <h2>マッチング</h2>
+    
+    <div class="input-group">
+      <input type="text" id="room-id" placeholder="合言葉を入力">
+    </div>
+    
+    <button id="host-btn">部屋を作成 / 参加</button>
+    
+    <div id="waiting-message" class="hidden">
+      <p>対戦相手を待っています...</p>
+    </div>
+  </div>
+
+  <!-- Battle Screen -->
+  <div id="battle-screen" class="screen hidden">
+    <div class="battle-layout">
+      <div class="battle-main">
+        <!-- Score Display -->
+        <div class="score-display">
+          <div class="score-item">
+            <div class="score-label">相手</div>
+            <div class="score-value" id="opponent-score">0</div>
+          </div>
+          <div class="score-item">
+            <div class="score-label">自分</div>
+            <div class="score-value" id="player-score">0</div>
+          </div>
+        </div>
+
+        <!-- Opponent Area -->
+        <div class="opponent-area">
+          <h3>相手のポケモン</h3>
+          <div class="pokemon-zone">
+            <div class="active-spot" id="opponent-active">
+              <span style="opacity: 0.5;">バトル場</span>
+            </div>
+            <div class="bench-spot" id="opponent-bench-0">
+              <span style="opacity: 0.3;">ベンチ</span>
+            </div>
+            <div class="bench-spot" id="opponent-bench-1">
+              <span style="opacity: 0.3;">ベンチ</span>
+            </div>
+            <div class="bench-spot" id="opponent-bench-2">
+              <span style="opacity: 0.3;">ベンチ</span>
+            </div>
+          </div>
+          <div>
+            <strong>手札:</strong> <span id="opponent-hand-count">0</span>枚
+          </div>
+        </div>
+
+        <!-- Player Area -->
+        <div class="player-area">
+          <h3>自分のポケモン</h3>
+          <div class="pokemon-zone">
+            <div class="active-spot" id="player-active">
+              <span style="opacity: 0.5;">バトル場</span>
+            </div>
+            <div class="bench-spot" id="player-bench-0">
+              <span style="opacity: 0.3;">ベンチ</span>
+            </div>
+            <div class="bench-spot" id="player-bench-1">
+              <span style="opacity: 0.3;">ベンチ</span>
+            </div>
+            <div class="bench-spot" id="player-bench-2">
+              <span style="opacity: 0.3;">ベンチ</span>
+            </div>
+          </div>
+          
+          <h3 style="margin-top: 1rem;">手札</h3>
+          <div class="hand-area" id="player-hand"></div>
+          
+          <h3 style="margin-top: 1rem;">エネルギーゾーン</h3>
+          <div class="energy-zone" id="player-energy"></div>
+        </div>
+      </div>
+
+      <!-- Battle Sidebar -->
+      <div class="battle-sidebar">
+        <div id="battle-log">
+          <h3>バトルログ</h3>
+          <div id="log-messages"></div>
+        </div>
+
+        <div id="game-controls">
+          <button id="ready-btn" class="hidden">準備完了</button>
+          <button id="end-turn-btn" class="hidden">ターン終了</button>
+          <button id="attack-btn" class="hidden">攻撃</button>
+          <button id="retreat-btn" class="hidden">にげる</button>
+          <div id="turn-indicator" style="margin-top: 1rem; text-align: center; font-weight: 700;"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+  
+  <!-- Game Modules -->
+  <script type="module" src="app.js"></script>
+</body>
+</html>
