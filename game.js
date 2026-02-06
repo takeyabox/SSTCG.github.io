@@ -177,6 +177,15 @@ function renderPokemon(containerId, pokemon) {
         return;
     }
 
+    // Mask opponent's Pokemon during setup
+    if (gameState.phase === 'setup' && containerId.startsWith('opponent')) {
+        const hasPokemon = !!pokemon;
+        container.innerHTML = hasPokemon ?
+            `<div class="card-back" style="background: #333; height: 100%; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #555;">(Hidden)</div>`
+            : `<span style="opacity: 0.3;">ベンチ</span>`;
+        return;
+    }
+
     const card = document.createElement('div');
     card.className = 'pokemon-card';
     if (pokemon.isEx) card.classList.add('ex');
@@ -324,11 +333,9 @@ function handleBattlePhase() {
 }
 
 function handleSwitchingPhase() {
-    const player = gameState[playerRole];
-
-    if (!player.switchingReady) {
-        addLog('system', 'ベンチポケモンを選んでバトル場に出してください');
-    }
+    // Do nothing here - messages are shown when entering switching phase
+    // This function is called on every state update during switching phase
+    // Adding logs here would create an infinite loop as addLog triggers state updates
 }
 
 function handleGameEnd() {
@@ -358,7 +365,7 @@ function handleHandCardClick(card, index) {
     } else if (phase === 'battle' && gameState.currentTurn === playerRole) {
         if (card.stage !== 'Basic' && canEvolve(card)) {
             evolve(card, index);
-        } else if (card.stage === 'Basic' && toArray(player.bench).filter(b => b).length < 3) {
+        } else if (card.stage === 'Basic' && normalizeBench(player.bench).filter(b => b).length < 3) {
             placeOnBench(card, index);
         }
     }
@@ -379,15 +386,38 @@ function placeAsActive(card, handIndex) {
     roomRef.child(`${playerRole}/active`).set(pokemon);
     roomRef.child(`${playerRole}/hand`).set(hand);
 
-    addLog('player', `${pokemon.name} をバトル場に出した`);
+    if (gameState.phase !== 'setup') {
+        addLog('player', `${pokemon.name} をバトル場に出した`);
+    }
+}
+
+// Helper function to normalize bench data to a proper 3-element array
+function normalizeBench(bench) {
+    if (!bench) return [null, null, null];
+
+    let benchArray = [];
+    if (Array.isArray(bench)) {
+        benchArray = [...bench];
+    } else {
+        // Firebase may convert arrays with nulls to objects
+        benchArray = [bench[0] || null, bench[1] || null, bench[2] || null];
+    }
+
+    // Ensure exactly 3 elements, replacing undefined with null
+    while (benchArray.length < 3) benchArray.push(null);
+    for (let i = 0; i < 3; i++) {
+        if (benchArray[i] === undefined) benchArray[i] = null;
+    }
+
+    return benchArray;
 }
 
 function placeOnBench(card, handIndex) {
     const player = gameState[playerRole];
     const hand = toArray(player.hand);
-    const bench = toArray(player.bench);
+    const benchArray = normalizeBench(player.bench);
 
-    const emptyIndex = bench.findIndex(b => !b);
+    const emptyIndex = benchArray.findIndex(b => !b);
     if (emptyIndex === -1) {
         alert('ベンチがいっぱいです (最大3匹)');
         return;
@@ -407,12 +437,14 @@ function placeOnBench(card, handIndex) {
     };
 
     hand.splice(handIndex, 1);
-    bench[emptyIndex] = pokemon;
+    benchArray[emptyIndex] = pokemon;
 
     roomRef.child(`${playerRole}/hand`).set(hand);
-    roomRef.child(`${playerRole}/bench`).set(bench);
+    roomRef.child(`${playerRole}/bench`).set(benchArray);
 
-    addLog('player', `${pokemon.name} をベンチに出した`);
+    if (gameState.phase !== 'setup') {
+        addLog('player', `${pokemon.name} をベンチに出した`);
+    }
 }
 
 function setupReady() {
@@ -435,7 +467,12 @@ function setupReady() {
 
 function startFirstTurn() {
     const firstPlayer = gameState.currentTurn;
-    addLog('system', `バトル開始! ${gameState[firstPlayer].name} のターン`);
+    const player = gameState[playerRole];
+    const opponent = gameState[oppRole];
+
+    addLog('system', `バトル開始!`);
+    addLog('system', `${gameState[firstPlayer].name} のターン`);
+
     generateEnergy(firstPlayer);
     drawCard(firstPlayer);
 }
@@ -491,12 +528,13 @@ function handleEnergyClick(energy, index) {
     const targetNum = parseInt(target);
     let targetPokemon = null;
     let targetPath = '';
+    const bench = normalizeBench(player.bench);
 
     if (targetNum === 0) {
         targetPokemon = player.active;
         targetPath = `${playerRole}/active`;
     } else if (targetNum >= 1 && targetNum <= 3) {
-        targetPokemon = player.bench[targetNum - 1];
+        targetPokemon = bench[targetNum - 1];
         targetPath = `${playerRole}/bench/${targetNum - 1}`;
     }
 
@@ -520,7 +558,7 @@ function handleEnergyClick(energy, index) {
 
 function canEvolve(evolutionCard) {
     const player = gameState[playerRole];
-    const bench = toArray(player.bench);
+    const bench = normalizeBench(player.bench);
 
     // Check active
     if (player.active && player.active.name === evolutionCard.evolutionFrom && player.active.turnsOnField >= 1) {
@@ -541,7 +579,7 @@ function canEvolve(evolutionCard) {
 function evolve(evolutionCard, handIndex) {
     const player = gameState[playerRole];
     const hand = toArray(player.hand);
-    const bench = toArray(player.bench);
+    const bench = normalizeBench(player.bench);
 
     // Find target
     let targetPath = '';
@@ -561,7 +599,15 @@ function evolve(evolutionCard, handIndex) {
     }
 
     if (!targetPokemon) {
-        alert('進化できるポケモンがいません(場に1ターン以上必要)');
+        // Find best guess for error message
+        const potentialTarget = player.active && player.active.name === evolutionCard.evolutionFrom ? player.active :
+            normalizeBench(player.bench).find(b => b && b.name === evolutionCard.evolutionFrom);
+
+        let msg = '進化できるポケモンがいません(場に1ターン以上必要)';
+        if (potentialTarget) {
+            msg += `\n対象: ${potentialTarget.name}, 経過ターン: ${potentialTarget.turnsOnField || 0}`;
+        }
+        alert(msg);
         return;
     }
 
@@ -569,9 +615,9 @@ function evolve(evolutionCard, handIndex) {
     const evolved = {
         ...evolutionCard,
         currentHp: targetPokemon.currentHp + (evolutionCard.hp - targetPokemon.hp), // Keep damage
-        attachedEnergy: targetPokemon.attachedEnergy,
-        status: targetPokemon.status,
-        turnsOnField: targetPokemon.turnsOnField
+        attachedEnergy: targetPokemon.attachedEnergy || [],
+        status: targetPokemon.status || null,
+        turnsOnField: 0 // Reset turn counter on evolution
     };
 
     if (evolved.currentHp > evolved.hp) evolved.currentHp = evolved.hp;
@@ -758,14 +804,15 @@ function initiateRetreat() {
     if (benchIndex === null) return;
 
     const index = parseInt(benchIndex) - 1;
-    if (index < 0 || index > 2 || !player.bench[index]) {
+    const bench = normalizeBench(player.bench);
+
+    if (index < 0 || index > 2 || !bench[index]) {
         alert('無効な選択です');
         return;
     }
 
     // Remove energy for retreat cost
     const newEnergy = active.attachedEnergy.slice(retreatCost);
-    const bench = [...player.bench];
     const newActive = { ...bench[index], attachedEnergy: bench[index].attachedEnergy || [] };
     bench[index] = { ...active, attachedEnergy: newEnergy };
 
@@ -776,6 +823,7 @@ function initiateRetreat() {
 }
 
 function handleFaint(role) {
+    // role is the Victim
     const player = gameState[role];
     const fainted = player.active;
 
@@ -784,23 +832,41 @@ function handleFaint(role) {
     discard.push(fainted);
     roomRef.child(`${role}/discard`).set(discard);
 
-    // Award points
+    // Award points to Attacker (Opponent of Victim)
     const points = fainted.isEx ? 2 : 1;
-    const oppScore = gameState[oppRole].score + points;
-    roomRef.child(`${oppRole}/score`).set(oppScore);
+    const attackerRole = role === 'p1' ? 'p2' : 'p1';
+    const attacker = gameState[attackerRole];
+    const newScore = (attacker.score || 0) + points;
 
-    addLog('system', `${fainted.name} はきぜつした! ${gameState[oppRole].name} に ${points} ポイント`);
+    roomRef.child(`${attackerRole}/score`).set(newScore);
 
-    // Check win condition
-    if (oppScore >= 3) {
+    addLog('system', `${fainted.name} はきぜつした! ${attacker.name} に ${points} ポイント`);
+
+    // Check win condition - score
+    if (newScore >= 3) {
         roomRef.update({
             phase: 'ended',
-            winner: oppRole
+            winner: attackerRole
+        });
+        return;
+    }
+
+    // Check if victim has bench Pokemon
+    const bench = normalizeBench(player.bench);
+    const hasBenchPokemon = bench.some(p => p !== null);
+
+    if (!hasBenchPokemon) {
+        // No bench Pokemon - instant loss
+        addLog('system', `${player.name} は場に出せるポケモンがいない!`);
+        roomRef.update({
+            phase: 'ended',
+            winner: attackerRole
         });
         return;
     }
 
     // Switch phase
+    addLog('system', `${player.name} はバトル場に出すポケモンを選んでください`);
     roomRef.update({ phase: 'switching' });
     roomRef.child(`${role}/active`).set(null);
     roomRef.child(`${role}/switchingReady`).set(false);
@@ -812,8 +878,14 @@ function handlePokemonClick(pokemon, containerId) {
 
         if (!player.active && !player.switchingReady) {
             const benchIndex = parseInt(containerId.split('-')[2]);
-            const bench = [...player.bench];
+            const bench = normalizeBench(player.bench);
             const newActive = bench[benchIndex];
+
+            if (!newActive) {
+                alert('そこにはポケモンがいません');
+                return;
+            }
+
             bench[benchIndex] = null;
 
             roomRef.child(`${playerRole}/active`).set(newActive);
@@ -822,11 +894,21 @@ function handlePokemonClick(pokemon, containerId) {
 
             addLog('player', `${newActive.name} をバトル場に出した`);
 
-            // Check if both ready
-            const opponent = gameState[oppRole];
-            if (opponent.switchingReady || opponent.active) {
-                roomRef.update({ phase: 'battle' });
-            }
+            // Check if both ready - need to check updated state
+            setTimeout(() => {
+                roomRef.once('value', (snapshot) => {
+                    const state = snapshot.val();
+                    const p1 = state.p1;
+                    const p2 = state.p2;
+
+                    if ((p1.switchingReady || p1.active) && (p2.switchingReady || p2.active)) {
+                        roomRef.update({ phase: 'battle' });
+                        // Reset switching flags
+                        roomRef.child('p1/switchingReady').set(false);
+                        roomRef.child('p2/switchingReady').set(false);
+                    }
+                });
+            }, 100);
         }
     }
 }
@@ -843,11 +925,19 @@ function endTurn() {
         const newTurns = (player.active.turnsOnField || 0) + 1;
         roomRef.child(`${playerRole}/active/turnsOnField`).set(newTurns);
     }
-    const bench = toArray(player.bench);
-    bench.forEach((pokemon, i) => {
+    // Increment turns on field
+    if (player.active) {
+        const newTurns = (player.active.turnsOnField || 0) + 1;
+        roomRef.child(`${playerRole}/active/turnsOnField`).set(newTurns);
+    }
+
+    // Use raw bench to preserve actual indices
+    const bench = player.bench || {};
+    Object.keys(bench).forEach(key => {
+        const pokemon = bench[key];
         if (pokemon) {
             const newTurns = (pokemon.turnsOnField || 0) + 1;
-            roomRef.child(`${playerRole}/bench/${i}/turnsOnField`).set(newTurns);
+            roomRef.child(`${playerRole}/bench/${key}/turnsOnField`).set(newTurns);
         }
     });
 

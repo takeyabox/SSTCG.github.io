@@ -448,7 +448,7 @@ export const CARDS = [
     ],
     isEx: false,
     stage: "Stage 1",
-    evolutionFrom: "96ガロン－"
+    evolutionFrom: ".96ガロン－"
   },
   {
     id: 23,
@@ -467,7 +467,7 @@ export const CARDS = [
     ],
     isEx: true,
     stage: "Stage 2",
-    evolutionFrom: "96ガロン"
+    evolutionFrom: ".96ガロン"
   },
   {
     id: 24,
@@ -697,7 +697,7 @@ export const CARDS = [
   },
   {
     id: 35,
-    name: "リッター3Kー",
+    name: "リッター3K－",
     type: "Grass",
     hp: 60,
     retreatCost: 3,
